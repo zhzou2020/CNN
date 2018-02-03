@@ -11,7 +11,8 @@ from scipy.misc import imread
 from collections import namedtuple
 import matplotlib.pyplot as plt
 
-from cs231n.image_utils import SQUEEZENET_MEAN, SQUEEZENET_STD
+SQUEEZENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+SQUEEZENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 def preprocess(img, size=512):
     transform = T.Compose([
@@ -58,23 +59,8 @@ cnn.type(dtype)
 for param in cnn.parameters():
     param.requires_grad = False
 
-# We provide this helper code which takes an image, a model (cnn), and returns a list of
-# feature maps, one per layer.
+# Use the CNN to extract features from the input image x.
 def extract_features(x, cnn):
-    """
-    Use the CNN to extract features from the input image x.
-    
-    Inputs:
-    - x: A PyTorch Variable of shape (N, C, H, W) holding a minibatch of images that
-      will be fed to the CNN.
-    - cnn: A PyTorch model that we will use to extract features.
-    
-    Returns:
-    - features: A list of feature for the input images x extracted using the cnn model.
-      features[i] is a PyTorch Variable of shape (N, C_i, H_i, W_i); recall that features
-      from different layers of the network may have different numbers of channels (C_i) and
-      spatial dimensions (H_i, W_i).
-    """
     features = []
     prev_feat = x
     for i, module in enumerate(cnn._modules.values()):
@@ -83,19 +69,8 @@ def extract_features(x, cnn):
         prev_feat = next_feat
     return features
 
+# Compute the content loss for style transfer.
 def content_loss(content_weight, content_current, content_original):
-    """
-    Compute the content loss for style transfer.
-    
-    Inputs:
-    - content_weight: Scalar giving the weighting for the content loss.
-    - content_current: features of the current image; this is a PyTorch Tensor of shape
-      (1, C_l, H_l, W_l).
-    - content_target: features of the content image, Tensor with shape (1, C_l, H_l, W_l).
-    
-    Returns:
-    - scalar content loss
-    """
     return content_weight * torch.nn.MSELoss(content_current, content_original)
 
 
@@ -138,27 +113,8 @@ def gram_matrix_test(correct):
     
 gram_matrix_test(answers['gm_out'])
 
-# Now put it together in the style_loss function...
+# Computes the style loss at a given set of layers.
 def style_loss(feats, style_layers, style_targets, style_weights):
-    """
-    Computes the style loss at a set of layers.
-    
-    Inputs:
-    - feats: list of the features at every layer of the current image, as produced by
-      the extract_features function.
-    - style_layers: List of layer indices into feats giving the layers to include in the
-      style loss.
-    - style_targets: List of the same length as style_layers, where style_targets[i] is
-      a PyTorch Variable giving the Gram matrix the source style image computed at
-      layer style_layers[i].
-    - style_weights: List of the same length as style_layers, where style_weights[i]
-      is a scalar giving the weight for the style loss at layer style_layers[i].
-      
-    Returns:
-    - style_loss: A PyTorch Variable holding a scalar giving the style loss.
-    """
-    # Hint: you can do this with one for loop over the style layers, and should
-    # not be very much code (~5 lines). You will need to use your gram_matrix function.
     style_loss = 0.
     for i in len(style_layers):
         style_loss += style_weights[i] * torch.nn.MSELoss(gram_matrix(feats[i]), style_targets)
@@ -186,30 +142,9 @@ def style_loss_test(correct):
     
 style_loss_test(answers['sl_out'])
 
-# Compute total variation loss
-def tv_loss(img, tv_weight):
-    h_shift = img[,,2:,]
-    pass
-
-def tv_loss_test(correct):
-    content_image = 'styles/tubingen.jpg'
-    image_size =  192
-    tv_weight = 2e-2
-
-    content_img = preprocess(PIL.Image.open(content_image), size=image_size)
-    content_img_var = Variable(content_img.type(dtype))
-    
-    student_output = tv_loss(content_img_var, tv_weight).data.numpy()
-    error = rel_error(correct, student_output)
-    print('Error is {:.3f}'.format(error))
-    
-tv_loss_test(answers['tv_out'])
-
 def style_transfer(content_image, style_image, image_size, style_size, content_layer, content_weight,
                    style_layers, style_weights, tv_weight, init_random = False):
     """
-    Run style transfer!
-    
     Inputs:
     - content_image: filename of content image
     - style_image: filename of style image
@@ -275,8 +210,7 @@ def style_transfer(content_image, style_image, image_size, style_size, content_l
         # Compute loss
         c_loss = content_loss(content_weight, feats[content_layer], content_target)
         s_loss = style_loss(feats, style_layers, style_targets, style_weights)
-        t_loss = tv_loss(img_var, tv_weight) 
-        loss = c_loss + s_loss + t_loss
+        loss = c_loss + s_loss
         
         loss.backward()
 
